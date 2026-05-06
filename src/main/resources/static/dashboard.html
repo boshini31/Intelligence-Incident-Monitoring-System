@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Incident Monitoring — Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0f1117;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        /* ── Topbar ── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 32px;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+        }
+        .topbar-brand { display: flex; align-items: center; gap: 12px; }
+        .topbar-brand .icon { font-size: 24px; }
+        .topbar-brand h1 { font-size: 18px; font-weight: 700; color: #f0f6ff; }
+        .topbar-brand span { font-size: 12px; color: #8b949e; }
+        .topbar-right { display: flex; align-items: center; gap: 16px; }
+
+        /* Token input */
+        .token-input-wrap { display: flex; gap: 8px; align-items: center; }
+        .token-input-wrap input {
+            width: 280px;
+            padding: 6px 12px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #e2e8f0;
+            font-size: 13px;
+        }
+        .token-input-wrap input::placeholder { color: #484f58; }
+        .btn {
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity .15s;
+        }
+        .btn:hover { opacity: .85; }
+        .btn-primary { background: #238636; color: #fff; }
+        .btn-secondary { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+        .btn-danger { background: #da3633; color: #fff; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #3fb950;
+            box-shadow: 0 0 6px #3fb950;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+        /* ── Main layout ── */
+        .main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+
+        /* ── Auth gate ── */
+        #auth-gate {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+            gap: 20px;
+        }
+        #auth-gate .gate-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 40px 48px;
+            text-align: center;
+            max-width: 480px;
+            width: 100%;
+        }
+        #auth-gate h2 { font-size: 20px; margin-bottom: 8px; }
+        #auth-gate p { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
+        .login-form { display: flex; flex-direction: column; gap: 12px; }
+        .login-form input {
+            padding: 10px 14px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        .login-form input::placeholder { color: #484f58; }
+        .login-form .btn { padding: 10px; font-size: 14px; }
+        .login-error { color: #f85149; font-size: 13px; margin-top: 4px; }
+
+        /* ── Dashboard content ── */
+        #dashboard { display: none; }
+
+        /* Stat cards */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 20px;
+            transition: border-color .2s;
+        }
+        .stat-card:hover { border-color: #58a6ff; }
+        .stat-card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+        .stat-card .value { font-size: 32px; font-weight: 700; line-height: 1; }
+        .stat-card .sub { font-size: 12px; color: #8b949e; margin-top: 6px; }
+        .stat-card.red .value { color: #f85149; }
+        .stat-card.yellow .value { color: #e3b341; }
+        .stat-card.green .value { color: #3fb950; }
+        .stat-card.blue .value { color: #58a6ff; }
+        .stat-card.purple .value { color: #bc8cff; }
+
+        /* Charts row */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .chart-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #c9d1d9; }
+        .chart-wrap { position: relative; height: 220px; }
+
+        /* Alert feed + incident table */
+        .bottom-grid {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            gap: 16px;
+        }
+
+        .panel {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .panel h3 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: #c9d1d9; }
+
+        /* Alert feed */
+        .alert-feed { display: flex; flex-direction: column; gap: 10px; max-height: 360px; overflow-y: auto; }
+        .alert-item {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px 14px;
+            border-left: 3px solid #30363d;
+        }
+        .alert-item.CRITICAL { border-left-color: #f85149; }
+        .alert-item.HIGH { border-left-color: #e3b341; }
+        .alert-item.MEDIUM { border-left-color: #58a6ff; }
+        .alert-item.LOW { border-left-color: #3fb950; }
+        .alert-item .svc { font-size: 12px; font-weight: 600; color: #58a6ff; }
+        .alert-item .msg { font-size: 12px; color: #8b949e; margin: 4px 0; line-height: 1.4; }
+        .alert-item .meta { display: flex; justify-content: space-between; font-size: 11px; color: #484f58; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-CRITICAL { background: #3d0000; color: #f85149; }
+        .badge-HIGH { background: #2d1f00; color: #e3b341; }
+        .badge-MEDIUM { background: #001a2d; color: #58a6ff; }
+        .badge-LOW { background: #001a0f; color: #3fb950; }
+        .badge-OPEN { background: #001a2d; color: #58a6ff; }
+        .badge-ACKNOWLEDGED { background: #2d2500; color: #e3b341; }
+        .badge-RESOLVED { background: #001a0f; color: #3fb950; }
+
+        /* Incidents table */
+        .table-wrap { overflow-x: auto; max-height: 360px; overflow-y: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { padding: 10px 12px; text-align: left; font-size: 11px; text-transform: uppercase;
+             letter-spacing: .5px; color: #8b949e; border-bottom: 1px solid #30363d;
+             position: sticky; top: 0; background: #161b22; z-index: 1; }
+        td { padding: 10px 12px; border-bottom: 1px solid #21262d; vertical-align: middle; }
+        tr:hover td { background: #1c2128; }
+        td .service { font-weight: 600; color: #c9d1d9; }
+        td .msg-cell { color: #8b949e; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        td .actions { display: flex; gap: 6px; }
+
+        .refresh-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #8b949e;
+        }
+        .refresh-bar strong { color: #e2e8f0; }
+        .last-updated { margin-left: auto; }
+
+        .empty-state { text-align: center; padding: 40px 20px; color: #484f58; font-size: 13px; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #30363d;
+                   border-top-color: #58a6ff; border-radius: 50%; animation: spin .7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+        @media (max-width: 900px) {
+            .chart-grid, .bottom-grid { grid-template-columns: 1fr; }
+            .token-input-wrap input { width: 180px; }
+            .main { padding: 16px; }
+            .topbar { padding: 12px 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Topbar ── -->
+<div class="topbar">
+    <div class="topbar-brand">
+        <span class="icon">🚨</span>
+        <div>
+            <h1>Smart Incident Monitoring</h1>
+            <span>Real-time dashboard</span>
+        </div>
+    </div>
+    <div class="topbar-right">
+        <div class="status-dot" id="live-dot" title="Live"></div>
+        <div class="token-input-wrap" id="token-section">
+            <input type="text" id="jwt-token-input" placeholder="Paste JWT token..." />
+            <button class="btn btn-primary" onclick="connectWithToken()">Connect</button>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="logout()" id="logout-btn" style="display:none">Logout</button>
+    </div>
+</div>
+
+<!-- ── Main ── -->
+<div class="main">
+
+    <!-- Auth gate (login form) -->
+    <div id="auth-gate">
+        <div class="gate-card">
+            <div style="font-size:48px;margin-bottom:12px">🔐</div>
+            <h2>Sign in to Dashboard</h2>
+            <p>Enter your credentials to access the incident monitoring dashboard, or paste a JWT token in the top bar.</p>
+            <div class="login-form">
+                <input type="text" id="login-username" placeholder="Username" />
+                <input type="password" id="login-password" placeholder="Password" />
+                <button class="btn btn-primary" onclick="loginAndConnect()">Sign In</button>
+                <div class="login-error" id="login-error"></div>
+            </div>
+            <p style="margin-top:16px;font-size:12px">
+                No account? Register via <code>POST /api/auth/register</code>
+            </p>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard">
+        <div class="refresh-bar">
+            <strong>Live Dashboard</strong>
+            <span id="refresh-spinner" class="spinner" style="display:none"></span>
+            <button class="btn btn-secondary btn-sm" onclick="loadAll()">↻ Refresh</button>
+            <span class="last-updated" id="last-updated"></span>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="stat-grid" id="stat-grid">
+            <div class="stat-card blue"><div class="label">Total Logs</div><div class="value" id="s-logs">—</div><div class="sub">All time</div></div>
+            <div class="stat-card purple"><div class="label">Total Incidents</div><div class="value" id="s-incidents">—</div><div class="sub">All time</div></div>
+            <div class="stat-card red"><div class="label">Open Incidents</div><div class="value" id="s-open">—</div><div class="sub">Needs attention</div></div>
+            <div class="stat-card yellow"><div class="label">Total Alerts</div><div class="value" id="s-alerts">—</div><div class="sub">All time</div></div>
+            <div class="stat-card green"><div class="label">Errors (24h)</div><div class="value" id="s-errors24">—</div><div class="sub">Last 24 hours</div></div>
+            <div class="stat-card red"><div class="label">Most Affected</div><div class="value" id="s-top-svc" style="font-size:16px;word-break:break-all">—</div><div class="sub">By error count</div></div>
+        </div>
+
+        <!-- Charts -->
+        <div class="chart-grid">
+            <div class="chart-card">
+                <h3>📊 Error Count by Service</h3>
+                <div class="chart-wrap"><canvas id="chart-errors"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <h3>🔥 Incidents by Service</h3>
+                <div class="chart-wrap"><canvas id="chart-incidents"></canvas></div>
+            </div>
+        </div>
+
+        <!-- Bottom: alerts + incidents -->
+        <div class="bottom-grid">
+            <div class="panel">
+                <h3>⚡ Recent Alerts</h3>
+                <div class="alert-feed" id="alert-feed">
+                    <div class="empty-state">Loading alerts…</div>
+                </div>
+            </div>
+            <div class="panel">
+                <h3>📋 Open Incidents</h3>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Service</th>
+                                <th>Message</th>
+                                <th>Severity</th>
+                                <th>Status</th>
+                                <th>Count</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="incident-table-body">
+                            <tr><td colspan="6" class="empty-state">Loading incidents…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = window.location.origin; // same origin as this page
+let token = localStorage.getItem('jwt_token') || '';
+let errorChart, incidentChart;
+let autoRefreshInterval;
+
+// ── Auth ──────────────────────────────────────────────────
+
+async function loginAndConnect() {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value.trim();
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+
+    if (!username || !password) {
+        errEl.textContent = 'Please enter username and password.';
+        return;
+    }
+
+    try {
+        const res = await fetch(`${API}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) throw new Error(json.message || 'Login failed');
+        setToken(json.data.token);
+    } catch (e) {
+        errEl.textContent = e.message;
+    }
+}
+
+function connectWithToken() {
+    const t = document.getElementById('jwt-token-input').value.trim();
+    if (!t) return;
+    setToken(t);
+}
+
+function setToken(t) {
+    token = t;
+    localStorage.setItem('jwt_token', t);
+    showDashboard();
+}
+
+function logout() {
+    token = '';
+    localStorage.removeItem('jwt_token');
+    clearInterval(autoRefreshInterval);
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('auth-gate').style.display = 'flex';
+    document.getElementById('logout-btn').style.display = 'none';
+    document.getElementById('token-section').style.display = 'flex';
+}
+
+function showDashboard() {
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('logout-btn').style.display = 'block';
+    document.getElementById('token-section').style.display = 'none';
+    loadAll();
+    autoRefreshInterval = setInterval(loadAll, 30000); // auto-refresh every 30s
+}
+
+// ── API helpers ─────────────────────────────────────────
+
+async function apiFetch(path) {
+    const res = await fetch(`${API}${path}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.status === 401) { logout(); throw new Error('Session expired'); }
+    const json = await res.json();
+    if (!json.success) throw new Error(json.message);
+    return json.data;
+}
+
+// ── Load all data ────────────────────────────────────────
+
+async function loadAll() {
+    document.getElementById('refresh-spinner').style.display = 'inline-block';
+    try {
+        const [summary, serviceStats, alerts, incidents] = await Promise.all([
+            apiFetch('/api/analytics/summary'),
+            apiFetch('/api/analytics/service-stats'),
+            apiFetch('/api/analytics/recent-alerts'),
+            apiFetch('/api/incidents/open')
+        ]);
+        renderSummary(summary);
+        renderCharts(serviceStats);
+        renderAlerts(alerts);
+        renderIncidents(incidents);
+        document.getElementById('last-updated').textContent =
+            'Last updated: ' + new Date().toLocaleTimeString();
+    } catch (e) {
+        console.error('Load error:', e.message);
+    } finally {
+        document.getElementById('refresh-spinner').style.display = 'none';
+    }
+}
+
+// ── Renderers ────────────────────────────────────────────
+
+function renderSummary(s) {
+    document.getElementById('s-logs').textContent = fmt(s.totalLogs);
+    document.getElementById('s-incidents').textContent = fmt(s.totalIncidents);
+    document.getElementById('s-open').textContent = fmt(s.openIncidents);
+    document.getElementById('s-alerts').textContent = fmt(s.totalAlerts);
+    document.getElementById('s-errors24').textContent = fmt(s.errorLogsLast24Hours);
+    document.getElementById('s-top-svc').textContent = s.mostAffectedService || 'N/A';
+}
+
+function renderCharts(stats) {
+    const labels = stats.map(s => s.serviceName);
+    const errors = stats.map(s => s.errorCount);
+    const incidents = stats.map(s => s.incidentCount);
+    const colors = ['#f85149','#e3b341','#58a6ff','#3fb950','#bc8cff','#ffa657','#79c0ff'];
+
+    // Error bar chart
+    if (errorChart) errorChart.destroy();
+    const ctx1 = document.getElementById('chart-errors').getContext('2d');
+    errorChart = new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Errors',
+                data: errors,
+                backgroundColor: colors,
+                borderRadius: 6
+            }]
+        },
+        options: chartOptions('Error Count')
+    });
+
+    // Incident doughnut
+    if (incidentChart) incidentChart.destroy();
+    const ctx2 = document.getElementById('chart-incidents').getContext('2d');
+    incidentChart = new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+            labels,
+            datasets: [{
+                data: incidents.length ? incidents : [1],
+                backgroundColor: colors,
+                borderColor: '#161b22',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#8b949e', font: { size: 12 } } }
+            }
+        }
+    });
+}
+
+function chartOptions(label) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false }
+        },
+        scales: {
+            x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+            y: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' }, beginAtZero: true }
+        }
+    };
+}
+
+function renderAlerts(alerts) {
+    const feed = document.getElementById('alert-feed');
+    if (!alerts || alerts.length === 0) {
+        feed.innerHTML = '<div class="empty-state">No alerts yet. Submit ERROR logs to trigger detection.</div>';
+        return;
+    }
+    feed.innerHTML = alerts.map(a => `
+        <div class="alert-item ${a.severity}">
+            <div class="svc">
+                ${a.serviceName}
+                <span class="badge badge-${a.severity}" style="float:right">${a.severity}</span>
+            </div>
+            <div class="msg">${esc(a.message.substring(0, 100))}${a.message.length > 100 ? '…' : ''}</div>
+            <div class="meta">
+                <span>${a.errorCount} errors</span>
+                <span>${timeAgo(a.triggeredAt)}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderIncidents(incidents) {
+    const tbody = document.getElementById('incident-table-body');
+    if (!incidents || incidents.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No open incidents 🎉</td></tr>';
+        return;
+    }
+    tbody.innerHTML = incidents.map(i => `
+        <tr>
+            <td><span class="service">${esc(i.serviceName)}</span></td>
+            <td><span class="msg-cell" title="${esc(i.message)}">${esc(i.message)}</span></td>
+            <td><span class="badge badge-${i.severity}">${i.severity}</span></td>
+            <td><span class="badge badge-${i.status}">${i.status}</span></td>
+            <td>${i.occurrenceCount}</td>
+            <td>
+                <div class="actions">
+                    <button class="btn btn-secondary btn-sm" onclick="ackIncident(${i.id})">ACK</button>
+                    <button class="btn btn-primary btn-sm" onclick="resolveIncident(${i.id})">Resolve</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// ── Actions ──────────────────────────────────────────────
+
+async function ackIncident(id) {
+    try {
+        await fetch(`${API}/api/incidents/${id}/acknowledge`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        loadAll();
+    } catch(e) { console.error(e); }
+}
+
+async function resolveIncident(id) {
+    try {
+        await fetch(`${API}/api/incidents/${id}/resolve`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        loadAll();
+    } catch(e) { console.error(e); }
+}
+
+// ── Utilities ────────────────────────────────────────────
+
+function fmt(n) { return n != null ? n.toLocaleString() : '—'; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function timeAgo(iso) {
+    if (!iso) return '';
+    const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return new Date(iso).toLocaleDateString();
+}
+
+// ── Init ─────────────────────────────────────────────────
+
+if (token) {
+    showDashboard();
+}
+</script>
+</body>
+</html>
